@@ -1,0 +1,58 @@
+name: Build Flutter APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      download_url:
+        description: 'URL ZIP project Flutter'
+        required: true
+        type: string
+      output_name:
+        description: 'Nama file APK output'
+        required: false
+        default: 'app-release'
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Download Project ZIP
+        run: |
+          curl -L "${{ github.event.inputs.download_url }}" -o project.zip
+          unzip -q project.zip -d project_raw
+          # Cari folder yang berisi pubspec.yaml
+          PROJECT_DIR=$(find project_raw -name "pubspec.yaml" -maxdepth 3 | head -1 | xargs dirname)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Flutter Get Dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.output_name }}
+          path: |
+            ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
